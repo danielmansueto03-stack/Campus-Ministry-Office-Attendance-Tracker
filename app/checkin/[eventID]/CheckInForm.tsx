@@ -53,7 +53,7 @@ export default function CheckInForm({ eventId }: { eventId: string }) {
     return (
       <div className="rounded-xl bg-emerald-50 p-6 text-center">
         <p className="text-lg font-semibold text-emerald-700">
-          ✅ You're checked in, {fullName}!
+          ✅ You&apos;re checked in, {fullName}!
         </p>
         <p className="mt-1 text-sm text-emerald-600">
           Thank you for confirming your attendance.

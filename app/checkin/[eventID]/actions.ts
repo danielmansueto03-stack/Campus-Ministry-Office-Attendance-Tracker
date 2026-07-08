@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { COLLEGES } from "@/data/colleges";
 import { revalidatePath } from "next/cache";
 
-export async function submitAttendance(eventId: string, formData: FormData) {
+export async function submitAttendance(eventID: string, formData: FormData) {
   const full_name = (formData.get("full_name") as string)?.trim();
   const college = formData.get("college") as string;
   const course = formData.get("course") as string;
@@ -29,7 +29,7 @@ export async function submitAttendance(eventId: string, formData: FormData) {
   }
 
   const { error } = await supabase.from("attendance").insert({
-    event_id: eventId,
+    event_id: eventID,
     full_name,
     college,
     course,
@@ -41,6 +41,6 @@ export async function submitAttendance(eventId: string, formData: FormData) {
     return { success: false, error: error.message };
   }
 
-  revalidatePath(`/admin/${eventId}`);
+  revalidatePath(`/admin/${eventID}`);
   return { success: true };
 }

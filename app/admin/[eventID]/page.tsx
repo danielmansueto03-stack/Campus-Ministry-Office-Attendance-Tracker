@@ -10,14 +10,14 @@ export const dynamic = "force-dynamic";
 export default async function EventDashboardPage({
   params,
 }: {
-  params: Promise<{ eventId: string }>;
+  params: Promise<{ eventID: string }>; 
 }) {
   const resolvedParams = await params;
 
   const { data: event } = await supabase
     .from("events")
     .select("*")
-    .eq("id", resolvedParams.eventId)
+    .eq("id", resolvedParams.eventID) 
     .single();
 
   if (!event) {
@@ -27,7 +27,7 @@ export default async function EventDashboardPage({
   const { data: attendance } = await supabase
     .from("attendance")
     .select("*")
-    .eq("event_id", resolvedParams.eventId)
+    .eq("event_id", resolvedParams.eventID) 
     .order("created_at", { ascending: false });
 
   return (
