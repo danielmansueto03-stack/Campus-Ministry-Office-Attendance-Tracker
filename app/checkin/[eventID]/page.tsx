@@ -8,12 +8,12 @@ export const dynamic = "force-dynamic";
 export default async function CheckInPage({
   params,
 }: {
-  params: { eventId: string };
+  params: { eventID: string };
 }) {
   const { data: event } = await supabase
     .from("events")
     .select("*")
-    .eq("id", params.eventId)
+    .eq("id", params.eventID)
     .single();
 
   if (!event) {
