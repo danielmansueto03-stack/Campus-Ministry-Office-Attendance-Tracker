@@ -8,17 +8,30 @@ export const dynamic = "force-dynamic";
 export default async function CheckInPage({
   params,
 }: {
-  params: { eventID: string };
+  params: Promise<{ eventID: string }>;
 }) {
-  const { data: event } = await supabase
+  // 1. Resolve the params first
+  const resolvedParams = await params;
+
+  // 2. Fetch from Supabase using the resolved ID
+  const { data: event, error: supabaseError } = await supabase
     .from("events")
     .select("*")
-    .eq("id", params.eventID)
+    .eq("id", resolvedParams.eventID)
     .single();
 
+  // 3. Log errors if they exist
+  if (supabaseError) {
+    console.error("Supabase Error:", supabaseError.message);
+  }
+
+  // 4. Trigger 404 if no event found
   if (!event) {
+    console.log("Event not found for ID:", resolvedParams.eventID);
     notFound();
   }
+
+  // ... rest of your return logic ...
 
   const eventData = event as EventRecord;
 

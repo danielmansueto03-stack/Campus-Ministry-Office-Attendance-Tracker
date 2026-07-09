@@ -14,7 +14,7 @@ export default function EventQRCode({ eventId }: { eventId: string }) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white p-5">
       <QRCode value={url} size={180} />
-      <p className="max-w-[220px] break-all text-center text-xs text-slate-500">
+      <p className="max-w-55 break-all text-center text-xs text-slate-500">
         {url}
       </p>
       <a
