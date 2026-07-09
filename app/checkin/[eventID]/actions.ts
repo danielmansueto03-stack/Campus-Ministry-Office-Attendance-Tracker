@@ -3,30 +3,41 @@
 import { supabase } from "@/lib/supabaseClient";
 import { revalidatePath } from "next/cache";
 
+// 1. Define the explicit shape of the action state
+interface ActionState {
+  success: boolean;
+  error: string;
+}
+
 function normalizeNamePart(v: string) {
   return v.trim().replace(/\s+/g, " ");
 }
 
-export async function submitAttendance(eventId: string, formData: FormData) {
-  const firstName = normalizeNamePart((formData.get("first_name") as string) || "");
-  const middleInitial = normalizeNamePart((formData.get("middle_initial") as string) || "");
-  const lastName = normalizeNamePart((formData.get("last_name") as string) || "");
-  const section = normalizeNamePart((formData.get("section") as string) || "");
+// 2. Use the interface type instead of 'any'
+export async function submitCheckIn(prevState: ActionState | null, formData: FormData) {
+  // Extract values from the adapted Form Data object
+  const eventId = formData.get("eventId") as string;
+  const fullNameRaw = (formData.get("fullName") as string) || "";
+  const sectionRaw = (formData.get("section") as string) || "";
 
-  if (!firstName || !lastName || !section) {
+  const fullName = normalizeNamePart(fullNameRaw);
+  const section = normalizeNamePart(sectionRaw).toUpperCase();
+
+  if (!eventId) {
     return {
       success: false,
-      error: "Please fill in your first name, last name, and section.",
+      error: "Critical Error: Event identification parameters are missing.",
     };
   }
 
-  const firstMiddle = middleInitial ? `${firstName} ${middleInitial}` : firstName;
-  const fullName = `${lastName}, ${firstMiddle}`;
+  if (!fullName || !section) {
+    return {
+      success: false,
+      error: "Please complete all required identity inputs before checking in.",
+    };
+  }
 
-  // Authoritative check happens here, inside the Postgres function, which
-  // atomically re-verifies the time window and locks the roster row —
-  // this is the "strict server-side" check, immune to race conditions
-  // even under thousands of near-simultaneous submissions.
+  // Authoritative server-side verification using your atomic postgres function
   const { data, error } = await supabase.rpc("check_in_student", {
     p_event_id: eventId,
     p_full_name: fullName,
@@ -49,19 +60,21 @@ export async function submitAttendance(eventId: string, formData: FormData) {
       case "closed":
         return { success: false, error: "Attendance for this event is now closed." };
       case "already_checked_in":
-        return { success: false, error: "This name and section has already been checked in." };
+        return { success: false, error: "This student profile has already checked in." };
       case "not_found":
-        return { success: false, error: "This event could not be found." };
+        return { success: false, error: "This event session target could not be verified." };
       case "not_on_roster":
       default:
         return {
           success: false,
           error:
-            "Record not found on the official event roster. Please check your spelling/section or contact an administrator.",
+            "Record not found on the official event roster. Please double check your spelling, name sequence, and section code.",
         };
     }
   }
 
+  // Force Next.js to purge cache for the matching layout dashboards
   revalidatePath(`/admin/${eventId}`);
-  return { success: true };
+  
+  return { success: true, error: "" };
 }
