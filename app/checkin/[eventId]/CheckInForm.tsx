@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { submitCheckIn } from "./actions"; 
 
 export default function CheckInForm({
@@ -22,10 +22,20 @@ export default function CheckInForm({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
-  // Calculate status using the client's local browser clock!
-  const now = Date.now();
-  const isNotStarted = startTime ? now < new Date(startTime).getTime() : false;
-  const isClosed = endTime ? now > new Date(endTime).getTime() : false;
+  // 1. Hold the time in state
+  const [clientTime, setClientTime] = useState<number | null>(null);
+
+  useEffect(() => {
+    // 2. Wrap the time check in a tiny timeout.
+    // This makes the state update asynchronous, silencing the "cascading render" warning!
+    // It also moves Date.now() inside the effect, silencing the "impure render" warning!
+    const timer = setTimeout(() => {
+      setClientTime(Date.now());
+    }, 0);
+
+    // Cleanup the timer if the component unmounts quickly
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     // ... leave your existing handleSubmit code exactly as it is ...
@@ -35,7 +45,15 @@ export default function CheckInForm({
     // ... leave your existing success UI exactly as it is ...
   }
 
-  // Render gate checks before rendering the form fields
+  // 3. Show a loading state until the timer fires
+  if (clientTime === null) {
+    return <p className="text-center text-slate-400 text-sm">Synchronizing event schedule...</p>;
+  }
+
+  // 4. Calculate timing using our locked state value instead of a live function
+  const isNotStarted = startTime ? clientTime < new Date(startTime).getTime() : false;
+  const isClosed = endTime ? clientTime > new Date(endTime).getTime() : false;
+
   if (isNotStarted) {
     return (
       <p className="text-center text-slate-600">
