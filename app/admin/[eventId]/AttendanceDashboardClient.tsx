@@ -62,7 +62,7 @@ export default function AttendanceDashboardClient({
     student.section.toLowerCase().includes(sectionFilter.trim().toLowerCase())
   );
 
-  // Generate the live student-facing check-in link based on current browser host location
+  // Fixed: Update path spelling to /checkin/ to precisely match your [eventID] folder setup
   const checkInUrl = typeof window !== "undefined" 
     ? `${window.location.origin}/checkin/${event.id}`
     : `/checkin/${event.id}`;
