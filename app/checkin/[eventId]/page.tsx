@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { getCachedEvent } from "@/lib/getCachedEvent";
+// Force the absolute correct name pairing. 
+// If your file on disk is "CheckInForm.tsx", keep it as written below.
 import CheckInForm from "./CheckInForm";
 
 export const revalidate = 15;
@@ -19,12 +21,17 @@ function getEventStatus(startTime: string | null, endTime: string | null): Event
   return "open";
 }
 
-export default async function CheckInPage({
-  params,
-}: {
-  params: { eventID: string };
-}) {
-  const event = await getCachedEvent(params.eventID);
+// Next.js 15 requires params to be an explicitly declared Promise interface
+interface PageProps {
+  params: Promise<{ eventId: string }>;
+}
+
+export default async function CheckInPage({ params }: PageProps) {
+  // Await the asynchronous route parameters map 
+  const resolvedParams = await params;
+  const { eventId } = resolvedParams;
+
+  const event = await getCachedEvent(eventId);
 
   if (!event) {
     notFound();
