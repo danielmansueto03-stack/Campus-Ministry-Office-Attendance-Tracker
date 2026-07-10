@@ -11,7 +11,7 @@ export default async function AdminDashboard() {
     .select("*")
     .order("event_date", { ascending: false });
 
-  // Server Action inline handler to wipe an unwanted session instantly
+  // Server Action handler to wipe an unwanted session instantly
   async function deleteEventAction(formData: FormData) {
     "use server";
     const eventId = formData.get("eventId") as string;
@@ -77,11 +77,8 @@ export default async function AdminDashboard() {
                   View Dashboard →
                 </Link>
 
-                <form action={deleteEventAction} onSubmit={(e) => {
-                  if (!confirm("Are you completely sure you want to permanently delete this event and all associated rosters?")) {
-                    e.preventDefault();
-                  }
-                }}>
+                {/* Fixed: Pure native HTML form element using Server Actions without client-side onSubmit handlers */}
+                <form action={deleteEventAction}>
                   <input type="hidden" name="eventId" value={session.id} />
                   <button
                     type="submit"
