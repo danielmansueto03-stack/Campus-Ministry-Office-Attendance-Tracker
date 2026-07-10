@@ -1,94 +1,66 @@
-"use client";
+import { notFound } from "next/navigation";
+import { getCachedEvent } from "@/lib/getCachedEvent";
+import CheckInForm from "./CheckInForm";
 
-import { useActionState } from "react";
-import { createEvent, CreateEventState } from "./actions";
+export const dynamic = "force-dynamic";
 
-const initialState: CreateEventState = { success: false, error: "", skipped: 0 };
+const BACKGROUND_STYLES: Record<string, string> = {
+  "solid-light": "bg-slate-50",
+  "solid-dark": "bg-slate-900",
+  "gradient-indigo": "bg-gradient-to-br from-indigo-600 to-purple-700",
+};
 
-export default function EventCreateForm() {
-  const [state, formAction, isPending] = useActionState(createEvent, initialState);
+interface PageProps {
+  params: Promise<{ eventId: string }>;
+}
+
+export default async function CheckInPage({ params }: PageProps) {
+  const resolvedParams = await params;
+  const { eventId } = resolvedParams;
+
+  const event = await getCachedEvent(eventId);
+
+  if (!event) {
+    notFound();
+  }
+
+  const backgroundStyle = event.background_style ?? "solid-light";
+  const bgClass = BACKGROUND_STYLES[backgroundStyle] ?? BACKGROUND_STYLES["solid-light"];
+  const isDark = backgroundStyle !== "solid-light";
+  const themeColor = event.theme_color || "#4f46e5";
 
   return (
-    <form action={formAction} className="grid gap-4 sm:grid-cols-2">
-      {state?.error && (
-        <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600 sm:col-span-2">
-          {state.error}
-        </p>
-      )}
-
-      <div className="sm:col-span-2">
-        <label className="mb-1 block text-sm font-medium text-slate-700">Event Name</label>
-        <input name="name" required className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700">Date</label>
-        <input type="date" name="event_date" required className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-      </div>
-
-      <div className="sm:col-span-2">
-        <label className="mb-1 block text-sm font-medium text-slate-700">Description (optional)</label>
-        <textarea name="description" rows={2} className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700">Attendance Opens</label>
-        <input type="datetime-local" name="start_time" className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700">Attendance Closes</label>
-        <input type="datetime-local" name="end_time" className="w-full rounded-lg border border-slate-300 px-3 py-2" />
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700">Theme Color</label>
-        <input type="color" name="theme_color" defaultValue="#4f46e5" className="h-10 w-full rounded-lg border border-slate-300" />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700">Background Style</label>
-        <select name="background_style" className="w-full rounded-lg border border-slate-300 px-3 py-2">
-          <option value="solid-light">Solid Light</option>
-          <option value="solid-dark">Solid Dark</option>
-          <option value="gradient-indigo">Gradient Indigo</option>
-        </select>
-      </div>
-
-      <div className="sm:col-span-2">
-        <label className="mb-1 block text-sm font-medium text-slate-700">Banner Image (optional)</label>
-        <input type="file" name="banner" accept="image/*" className="w-full text-sm" />
-      </div>
-
-      <div className="sm:col-span-2">
-        <label className="mb-1 block text-sm font-medium text-slate-700">
-          Expected Roster (required — used to validate check-ins)
-        </label>
-        <p className="mb-2 text-xs text-slate-500">
-          One student per line: <code>Last Name, First Name M.I., Section</code> — e.g.{" "}
-          <code>Doe, John A., 1-K</code> or <code>Smith, Jane, 1-A</code>
-        </p>
-        <textarea
-          name="roster"
-          rows={8}
-          required
-          placeholder={"Doe, John A., 1-K\nSmith, Jane, 1-A"}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
-        />
-        {state?.skipped > 0 && (
-          <p className="mt-1 text-xs text-amber-600">
-            {state.skipped} line(s) were skipped on the last attempt due to formatting.
-          </p>
+    <main className={`flex min-h-screen flex-col items-center justify-center p-6 ${bgClass}`}>
+      <div className="w-full max-w-md">
+        {event.banner_url && (
+          <img
+            src={event.banner_url}
+            alt={`${event.name} banner`}
+            className="mb-6 w-full rounded-xl object-cover"
+          />
         )}
-      </div>
 
-      <div className="sm:col-span-2">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-lg bg-indigo-600 px-6 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-        >
-          {isPending ? "Creating..." : "Create Event"}
-        </button>
+        <div className={`mb-6 text-center ${isDark ? "text-white" : "text-slate-900"}`}>
+          <h1 className="text-2xl font-bold">{event.name}</h1>
+          <p className={isDark ? "text-slate-200" : "text-slate-500"}>
+            {new Date(event.event_date + "T00:00:00").toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-white p-6 shadow-sm">
+          {/* We pass all parameters directly to the client form, which now handles the clock evaluation natively */}
+          <CheckInForm 
+            eventId={event.id} 
+            themeColor={themeColor} 
+            startTime={event.start_time}
+            endTime={event.end_time}
+          />
+        </div>
       </div>
-    </form>
+    </main>
   );
 }

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getCachedEvent } from "@/lib/getCachedEvent";
-import CheckInForm from "./CheckInForm";
+// Replace your old import line with this absolute directory path:
+import CheckInForm from "@/app/checkin/[eventId]/CheckInForm";
 
 export const dynamic = "force-dynamic";
 
