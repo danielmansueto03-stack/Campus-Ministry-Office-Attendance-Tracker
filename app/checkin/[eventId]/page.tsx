@@ -1,16 +1,8 @@
 import { notFound } from "next/navigation";
 import { getCachedEvent } from "@/lib/getCachedEvent";
-// Force the absolute correct name pairing. 
-// If your file on disk is "CheckInForm.tsx", keep it as written below.
 import CheckInForm from "./CheckInForm";
 
-// Add this line to force Next.js to evaluate the opening times completely live:
-export const dynamic = "force-dynamic"; 
-
-// You can delete or keep export const revalidate = 15; 
-// export const dynamic = "force-dynamic" takes total priority.
-
-export const revalidate = 15;
+export const dynamic = "force-dynamic";
 
 const BACKGROUND_STYLES: Record<string, string> = {
   "solid-light": "bg-slate-50",
@@ -18,22 +10,11 @@ const BACKGROUND_STYLES: Record<string, string> = {
   "gradient-indigo": "bg-gradient-to-br from-indigo-600 to-purple-700",
 };
 
-type EventStatus = "not_started" | "open" | "closed";
-
-function getEventStatus(startTime: string | null, endTime: string | null): EventStatus {
-  const now = Date.now();
-  if (startTime && now < new Date(startTime).getTime()) return "not_started";
-  if (endTime && now > new Date(endTime).getTime()) return "closed";
-  return "open";
-}
-
-// Next.js 15 requires params to be an explicitly declared Promise interface
 interface PageProps {
   params: Promise<{ eventId: string }>;
 }
 
 export default async function CheckInPage({ params }: PageProps) {
-  // Await the asynchronous route parameters map 
   const resolvedParams = await params;
   const { eventId } = resolvedParams;
 
@@ -43,7 +24,6 @@ export default async function CheckInPage({ params }: PageProps) {
     notFound();
   }
 
-  const status = getEventStatus(event.start_time, event.end_time);
   const backgroundStyle = event.background_style ?? "solid-light";
   const bgClass = BACKGROUND_STYLES[backgroundStyle] ?? BACKGROUND_STYLES["solid-light"];
   const isDark = backgroundStyle !== "solid-light";
@@ -72,21 +52,13 @@ export default async function CheckInPage({ params }: PageProps) {
         </div>
 
         <div className="rounded-xl bg-white p-6 shadow-sm">
-          {status === "not_started" && (
-            <p className="text-center text-slate-600">
-              Attendance opens at{" "}
-              {event.start_time
-                ? new Date(event.start_time).toLocaleString()
-                : "the scheduled time"}
-              .
-            </p>
-          )}
-          {status === "closed" && (
-            <p className="text-center text-slate-600">
-              Attendance for this event is now closed.
-            </p>
-          )}
-          {status === "open" && <CheckInForm eventId={event.id} themeColor={themeColor} />}
+          {/* We pass all parameters directly to the client form, which now handles the clock evaluation natively */}
+          <CheckInForm 
+            eventId={event.id} 
+            themeColor={themeColor} 
+            startTime={event.start_time}
+            endTime={event.end_time}
+          />
         </div>
       </div>
     </main>
