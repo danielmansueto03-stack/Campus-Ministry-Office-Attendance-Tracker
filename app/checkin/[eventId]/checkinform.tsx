@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useActionState, startTransition } from "react";
 import { submitCheckIn } from "./actions"; 
+
+// Match the ActionState interface defined inside your actions.ts
+const initialState = { success: false, error: "" };
 
 export default function CheckInForm({
   eventId,
@@ -18,39 +21,55 @@ export default function CheckInForm({
   const [middleInitial, setMiddleInitial] = useState("");
   const [lastName, setLastName] = useState("");
   const [section, setSection] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState("");
 
-  // 1. Hold the time in state
+  // 1. Hook up the formal React Action State with your server action
+  const [state, formAction, isPending] = useActionState(submitCheckIn, initialState);
+
+  // 2. Lock synchronization time safely
   const [clientTime, setClientTime] = useState<number | null>(null);
 
   useEffect(() => {
-    // 2. Wrap the time check in a tiny timeout.
-    // This makes the state update asynchronous, silencing the "cascading render" warning!
-    // It also moves Date.now() inside the effect, silencing the "impure render" warning!
     const timer = setTimeout(() => {
       setClientTime(Date.now());
     }, 0);
-
-    // Cleanup the timer if the component unmounts quickly
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    // ... leave your existing handleSubmit code exactly as it is ...
+  // 3. The Interceptor: Compile the standard fields into the layout expected by actions.ts
+  const handleFormSubmission = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    // Reconstruct Last, First M.I. layout authorized by your roster script
+    const miPart = middleInitial.trim() ? ` ${middleInitial.trim()}.` : "";
+    const compiledFullName = `${lastName.trim()}, ${firstName.trim()}${miPart}`;
+
+    const formData = new FormData();
+    formData.append("eventId", eventId);
+    formData.append("fullName", compiledFullName);
+    formData.append("section", section);
+
+    // Fire the server transition securely
+    startTransition(() => {
+      formAction(formData);
+    });
   };
 
-  if (submitted) {
-    // ... leave your existing success UI exactly as it is ...
+  // 4. Render explicit Success UI state upon successful backend confirmation
+  if (state?.success) {
+    return (
+      <div className="text-center p-6 bg-emerald-50 rounded-xl border border-emerald-200">
+        <h3 className="text-lg font-semibold text-emerald-800 mb-1">Check-In Successful!</h3>
+        <p className="text-sm text-emerald-600">
+          Your attendance profile has been recorded on the roster. You may safely close this window.
+        </p>
+      </div>
+    );
   }
 
-  // 3. Show a loading state until the timer fires
   if (clientTime === null) {
     return <p className="text-center text-slate-400 text-sm">Synchronizing event schedule...</p>;
   }
 
-  // 4. Calculate timing using our locked state value instead of a live function
   const isNotStarted = startTime ? clientTime < new Date(startTime).getTime() : false;
   const isClosed = endTime ? clientTime > new Date(endTime).getTime() : false;
 
@@ -71,15 +90,16 @@ export default function CheckInForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-4">
-      {/* ... leave the rest of your form return fields exactly as they are ... */}
+    // Update action processing target to use our custom structural compilation handler
+    <form onSubmit={handleFormSubmission} className="grid gap-4">
       <p className="text-sm text-slate-500">
         Enter your complete official name and section exactly as they appear on the
         official roster.
       </p>
 
-      {error && (
-        <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</p>
+      {/* Capture server errors returned by your database atomic check script */}
+      {state?.error && (
+        <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{state.error}</p>
       )}
 
       <div className="grid grid-cols-2 gap-3">
@@ -131,11 +151,11 @@ export default function CheckInForm({
 
       <button
         type="submit"
-        disabled={submitting}
+        disabled={isPending}
         style={{ backgroundColor: themeColor }}
         className="mt-2 rounded-lg py-3 font-medium text-white transition hover:opacity-90 disabled:opacity-60 shadow-sm"
       >
-        {submitting ? "Validating..." : "Check In"}
+        {isPending ? "Validating..." : "Check In"}
       </button>
     </form>
   );
