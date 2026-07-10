@@ -7,11 +7,14 @@ export async function login(formData: FormData) {
   const password = formData.get("password") as string;
   const adminPassword = process.env.ADMIN_PASSWORD;
 
-  // Safety check to ensure the environment variable actually exists on Vercel
+  // 1. Guard check: Make sure the comparison variable exists
   if (!adminPassword) {
-    console.error("CRITICAL ERROR: ADMIN_PASSWORD environment variable is missing on the server.");
-    redirect("/admin/login?error=missing_config");
+    console.error("CRITICAL CONFIG ERROR: ADMIN_PASSWORD is missing in Vercel settings.");
+    redirect("/admin/login?error=system_configuration");
   }
+
+  // 2. Track authentication status
+  let isAuthed = false;
 
   if (password && password === adminPassword) {
     const cookieStore = await cookies();
@@ -23,9 +26,13 @@ export async function login(formData: FormData) {
       maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
-    // Directly invoke redirect outside any conditional blocks if possible, or right here
-    redirect("/admin");
+    isAuthed = true;
   }
-  
-  redirect("/admin/login?error=1");
+
+  // 3. Next.js 15 Requirement: Always trigger redirects outside of conditional try/catch evaluation blocks
+  if (isAuthed) {
+    redirect("/admin");
+  } else {
+    redirect("/admin/login?error=1");
+  }
 }
