@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getCachedEvent } from "@/lib/getCachedEvent";
-// This tells the compiler: "Look inside my exact same folder for CheckInForm.tsx"
-import CheckInForm from "./CheckInForm";
+// This tells Vercel's compiler to trace directly from your root directory structure
+import CheckInForm from "@/app/checkin/[eventId]/CheckInForm";
 
 export const dynamic = "force-dynamic";
 
