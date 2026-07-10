@@ -4,6 +4,12 @@ import { getCachedEvent } from "@/lib/getCachedEvent";
 // If your file on disk is "CheckInForm.tsx", keep it as written below.
 import CheckInForm from "./CheckInForm";
 
+// Add this line to force Next.js to evaluate the opening times completely live:
+export const dynamic = "force-dynamic"; 
+
+// You can delete or keep export const revalidate = 15; 
+// export const dynamic = "force-dynamic" takes total priority.
+
 export const revalidate = 15;
 
 const BACKGROUND_STYLES: Record<string, string> = {
