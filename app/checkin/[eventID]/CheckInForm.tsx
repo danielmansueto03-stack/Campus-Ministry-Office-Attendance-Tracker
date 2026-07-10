@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { submitAttendance } from "./actions";
+// Import the corrected action name from your check-in actions directory
+import { submitCheckIn } from "./actions"; 
 
 export default function CheckInForm({
   eventId,
@@ -23,13 +24,23 @@ export default function CheckInForm({
     setError("");
     setSubmitting(true);
 
-    const formData = new FormData();
-    formData.set("first_name", firstName);
-    formData.set("middle_initial", middleInitial);
-    formData.set("last_name", lastName);
-    formData.set("section", section);
+    // 1. Clean inputs up nicely
+    const cleanFirst = firstName.trim();
+    const cleanLast = lastName.trim();
+    const cleanMiddle = middleInitial.trim().replace(/\./g, ""); // Strip any trailing dots if typed
 
-    const result = await submitAttendance(eventId, formData);
+    // 2. Format exactly to match: "LastName, FirstName M.I." (without the trailing dot)
+    // Adjust this line if your roster table doesn't use the middle initial spacing!
+    const cleanMiddlePart = cleanMiddle ? ` ${cleanMiddle}` : "";
+    const formattedFullName = `${cleanLast}, ${cleanFirst}${cleanMiddlePart}`;
+
+    const formData = new FormData();
+    formData.set("eventId", eventId);
+    formData.set("fullName", formattedFullName);
+    formData.set("section", section.trim().toUpperCase());
+
+    // Call your production validation endpoint
+    const result = await submitCheckIn(null, formData);
     setSubmitting(false);
 
     if (result.success) {
@@ -42,8 +53,12 @@ export default function CheckInForm({
   if (submitted) {
     return (
       <div className="rounded-xl bg-emerald-50 p-6 text-center">
+        <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 font-bold">
+          ✓
+        </div>
+        {/* Fixed the typo here */}
         <p className="text-lg font-semibold text-emerald-700">
-          ✅ You@aposre checked in, {firstName}!
+          You are checked in, {firstName}!
         </p>
         <p className="mt-1 text-sm text-emerald-600">
           Thank you for confirming your attendance.
@@ -70,7 +85,8 @@ export default function CheckInForm({
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
             required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2"
+            style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
           />
         </div>
         <div>
@@ -78,8 +94,10 @@ export default function CheckInForm({
           <input
             value={middleInitial}
             onChange={(e) => setMiddleInitial(e.target.value)}
-            placeholder="Leave blank if none"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+            placeholder="M.I."
+            maxLength={2}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2"
+            style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
           />
         </div>
       </div>
@@ -90,7 +108,8 @@ export default function CheckInForm({
           value={lastName}
           onChange={(e) => setLastName(e.target.value)}
           required
-          className="w-full rounded-lg border border-slate-300 px-3 py-2"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2"
+          style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
         />
       </div>
 
@@ -101,7 +120,8 @@ export default function CheckInForm({
           onChange={(e) => setSection(e.target.value)}
           required
           placeholder="e.g. 1-K"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 uppercase font-mono text-sm focus:outline-none focus:ring-2"
+          style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
         />
       </div>
 
@@ -109,9 +129,9 @@ export default function CheckInForm({
         type="submit"
         disabled={submitting}
         style={{ backgroundColor: themeColor }}
-        className="mt-2 rounded-lg py-3 font-medium text-white disabled:opacity-60"
+        className="mt-2 rounded-lg py-3 font-medium text-white transition hover:opacity-90 disabled:opacity-60 shadow-sm"
       >
-        {submitting ? "Submitting..." : "Check In"}
+        {submitting ? "Validating..." : "Check In"}
       </button>
     </form>
   );
