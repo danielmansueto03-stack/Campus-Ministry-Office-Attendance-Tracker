@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getCachedEvent } from "@/lib/getCachedEvent";
-import CheckInForm from "./CheckInForm";
+import CheckInForm from "./checkinform";
 
 export const dynamic = "force-dynamic";
 
