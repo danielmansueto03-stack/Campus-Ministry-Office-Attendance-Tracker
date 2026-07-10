@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
-// Import the corrected action name from your check-in actions directory
 import { submitCheckIn } from "./actions"; 
 
 export default function CheckInForm({
   eventId,
   themeColor,
+  startTime,
+  endTime,
 }: {
   eventId: string;
   themeColor: string;
+  startTime: string | null;
+  endTime: string | null;
 }) {
   const [firstName, setFirstName] = useState("");
   const [middleInitial, setMiddleInitial] = useState("");
@@ -19,56 +22,39 @@ export default function CheckInForm({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
+  // Calculate status using the client's local browser clock!
+  const now = Date.now();
+  const isNotStarted = startTime ? now < new Date(startTime).getTime() : false;
+  const isClosed = endTime ? now > new Date(endTime).getTime() : false;
+
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSubmitting(true);
-
-    // 1. Clean inputs up nicely
-    const cleanFirst = firstName.trim();
-    const cleanLast = lastName.trim();
-    const cleanMiddle = middleInitial.trim().replace(/\./g, ""); // Strip any trailing dots if typed
-
-    // 2. Format exactly to match: "LastName, FirstName M.I." (without the trailing dot)
-    // Adjust this line if your roster table doesn't use the middle initial spacing!
-    const cleanMiddlePart = cleanMiddle ? ` ${cleanMiddle}` : "";
-    const formattedFullName = `${cleanLast}, ${cleanFirst}${cleanMiddlePart}`;
-
-    const formData = new FormData();
-    formData.set("eventId", eventId);
-    formData.set("fullName", formattedFullName);
-    formData.set("section", section.trim().toUpperCase());
-
-    // Call your production validation endpoint
-    const result = await submitCheckIn(null, formData);
-    setSubmitting(false);
-
-    if (result.success) {
-      setSubmitted(true);
-    } else {
-      setError(result.error ?? "Something went wrong. Please try again.");
-    }
+    // ... leave your existing handleSubmit code exactly as it is ...
   };
 
   if (submitted) {
+    // ... leave your existing success UI exactly as it is ...
+  }
+
+  // Render gate checks before rendering the form fields
+  if (isNotStarted) {
     return (
-      <div className="rounded-xl bg-emerald-50 p-6 text-center">
-        <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 font-bold">
-          ✓
-        </div>
-        {/* Fixed the typo here */}
-        <p className="text-lg font-semibold text-emerald-700">
-          You are checked in, {firstName}!
-        </p>
-        <p className="mt-1 text-sm text-emerald-600">
-          Thank you for confirming your attendance.
-        </p>
-      </div>
+      <p className="text-center text-slate-600">
+        Attendance opens at {startTime ? new Date(startTime).toLocaleString() : "the scheduled time"}.
+      </p>
+    );
+  }
+
+  if (isClosed) {
+    return (
+      <p className="text-center text-slate-600">
+        Attendance for this event is now closed.
+      </p>
     );
   }
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-4">
+      {/* ... leave the rest of your form return fields exactly as they are ... */}
       <p className="text-sm text-slate-500">
         Enter your complete official name and section exactly as they appear on the
         official roster.
