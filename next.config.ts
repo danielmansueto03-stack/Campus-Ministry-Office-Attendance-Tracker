@@ -6,7 +6,8 @@ try {
   const dirPath = path.resolve(process.cwd(), 'app/checkin/[eventId]');
   console.log("=== DEBUG: FILES IN [eventId] FOLDER ===", fs.readdirSync(dirPath));
 } catch (e) {
-  console.log("=== DEBUG: COULD NOT READ FOLDER ===", e.message);
+  // Safely cast 'e' to a string to satisfy strict TypeScript rules
+  console.log("=== DEBUG: COULD NOT READ FOLDER ===", String(e));
 }
 
 /** @type {import('next').NextConfig} */
