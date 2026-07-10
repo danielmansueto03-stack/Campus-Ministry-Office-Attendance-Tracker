@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getCachedEvent } from "@/lib/getCachedEvent";
-// Replace your old import line with this absolute directory path:
-import CheckInForm from "@/app/checkin/[eventId]/CheckInForm";
+// This tells the compiler: "Look inside my exact same folder for CheckInForm.tsx"
+import CheckInForm from "./CheckInForm";
 
 export const dynamic = "force-dynamic";
 
