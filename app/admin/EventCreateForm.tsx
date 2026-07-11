@@ -75,18 +75,18 @@ export default function EventCreateForm() {
         <input type="file" name="banner" accept="image/*" className="w-full text-sm" />
       </div>
 
+      {/* CHANGED: Made roster field completely optional */}
       <div className="sm:col-span-2">
         <label className="mb-1 block text-sm font-medium text-slate-700">
-          Expected Roster (required)
+          Expected Roster (Optional)
         </label>
         <p className="mb-2 text-xs text-slate-500">
           One student per line: <code>Last Name, First Name M.I., Section</code> — e.g.{" "}
-          <code>Doe, John A., 1-K</code>
+          <code>Doe, John A., 1-K</code>. <strong>Leave blank for open public events (e.g., school-wide).</strong>
         </p>
         <textarea
           name="roster"
           rows={8}
-          required
           placeholder={"Doe, John A., 1-K\nSmith, Jane, 1-A"}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
         />

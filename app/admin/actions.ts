@@ -101,9 +101,11 @@ export async function createEvent(
     return { success: false, error: eventError?.message ?? "Failed to create event.", skipped: 0 };
   }
 
+  // Parse the roster string
   const { rows, skipped } = parseRoster(rosterRaw, eventRow.id);
 
-  if (rows.length > 0) {
+  // CHANGED: Wrapped in a safety conditional block. Only insert if students exist in the parsed array.
+  if (rows && rows.length > 0) {
     const { error: rosterError } = await supabaseAdmin.from("event_roster").insert(rows);
     if (rosterError) {
       return {
@@ -114,9 +116,7 @@ export async function createEvent(
     }
   }
 
-  // ... everything above this inside createEvent remains exactly the same ...
-
-  // FIX: Clear the cache safely using path revalidation
+  // Clear cache pathways safely
   revalidatePath("/admin");
   revalidatePath(`/checkin/${eventRow.id}`); 
   
@@ -124,13 +124,13 @@ export async function createEvent(
 }
 
 export async function logout() {
-  // FIX: Await the cookies because it returns a Promise in newer Next.js versions
   const { cookies } = await import("next/headers");
   const cookieStore = await cookies();
   cookieStore.set("admin_session", "", { path: "/", maxAge: 0 });
   
   redirect("/admin/login");
 }
+
 export type UpdateSettingsState = {
   success: boolean;
   error: string;
@@ -163,8 +163,6 @@ export async function updateEventSettings(
       start_time,
       end_time,
       theme_color,
-      // If your database column for force status does not exist yet, you can pass this or fallback cleanly
-      // fields: force_status
     })
     .eq("id", eventId);
 
