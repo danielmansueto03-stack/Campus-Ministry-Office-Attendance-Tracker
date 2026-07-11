@@ -3,7 +3,36 @@
 import { useState, useEffect, useActionState, startTransition } from "react";
 import { submitCheckIn } from "./actions"; 
 
-// Match the ActionState interface defined inside your actions.ts
+// 1. Institutional data mapping for dropdown cascades
+const ACADEMIC_DATA = {
+  CHAP: {
+    name: "College of Health and Allied Professions (CHAP)",
+    courses: ["BSMT", "BSN", "BSPHARMA", "BSMIDWIFERY"],
+  },
+  CLASE: {
+    name: "College of Liberal Arts and Sciences Education (CLASE)",
+    courses: ["BSPSYCH", "BSED", "BAPOLSCI", "BSCHEM", "BSMATHEMATICS"],
+  },
+  CABECS: {
+    name: "College of Accountancy, Business Education, and Computer Studies (CABECS)",
+    courses: ["BSA", "BSAIS", "BSBA", "BSHM", "BSTM", "BSIT"],
+  },
+  COE: {
+    name: "College of Engineering (COE)",
+    courses: ["BSCE", "BSCHE", "BSME"],
+  },
+  CCJE: {
+    name: "College of Criminal Justice Education (CCJE)",
+    courses: ["BSCRIM"],
+  },
+  BED: {
+    name: "Basic Education Department (BED)",
+    courses: ["G7", "G8", "G9", "G10", "G11", "G12"],
+  },
+} as const;
+
+type CollegeKey = keyof typeof ACADEMIC_DATA;
+
 const initialState = { success: false, error: "" };
 
 export default function CheckInForm({
@@ -21,6 +50,11 @@ export default function CheckInForm({
   const [middleInitial, setMiddleInitial] = useState("");
   const [lastName, setLastName] = useState("");
   const [section, setSection] = useState("");
+  
+  // New tracking state fields for tracking metrics per college/course
+  const [college, setCollege] = useState<CollegeKey | "">("");
+  const [course, setCourse] = useState("");
+  const [yearLevel, setYearLevel] = useState("");
 
   // 1. Hook up the formal React Action State with your server action
   const [state, formAction, isPending] = useActionState(submitCheckIn, initialState);
@@ -35,7 +69,17 @@ export default function CheckInForm({
     return () => clearTimeout(timer);
   }, []);
 
-  // 3. The Interceptor: Compile the standard fields into the layout expected by actions.ts
+  const handleCollegeChange = (val: CollegeKey | "") => {
+    setCollege(val);
+    setCourse(""); // Purge active course choices to prevent layout mismatch anomalies
+    if (val === "BED") {
+      setYearLevel("N/A"); // Auto-assign high school entries as N/A
+    } else {
+      setYearLevel("");
+    }
+  };
+
+  // 3. The Interceptor: Compile the fields into the layout expected by actions.ts
   const handleFormSubmission = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -47,6 +91,11 @@ export default function CheckInForm({
     formData.append("eventId", eventId);
     formData.append("fullName", compiledFullName);
     formData.append("section", section);
+    
+    // NEW: Pack the academic breakdown details safely into the formData payload
+    formData.append("college", college);
+    formData.append("course", course);
+    formData.append("yearLevel", yearLevel);
 
     // Fire the server transition securely
     startTransition(() => {
@@ -89,12 +138,12 @@ export default function CheckInForm({
     );
   }
 
+  const isBasicEd = college === "BED";
+
   return (
-    // Update action processing target to use our custom structural compilation handler
     <form onSubmit={handleFormSubmission} className="grid gap-4">
       <p className="text-sm text-slate-500">
-        Enter your complete official name and section exactly as they appear on the
-        official roster.
+        Enter your complete official name and academic section parameters exactly to record your attendance.
       </p>
 
       {/* Capture server errors returned by your database atomic check script */}
@@ -137,13 +186,80 @@ export default function CheckInForm({
         />
       </div>
 
+      {/* NEW: College Dropdown Field Selection */}
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700">College / Department</label>
+        <select
+          value={college}
+          onChange={(e) => handleCollegeChange(e.target.value as CollegeKey | "")}
+          required
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2"
+          style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
+        >
+          <option value="">-- Select your College --</option>
+          {Object.entries(ACADEMIC_DATA).map(([key, data]) => (
+            <option key={key} value={key}>{data.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {/* NEW: Dynamic Dependent Course Selection Field */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            {isBasicEd ? "Grade Level" : "Course"}
+          </label>
+          <select
+            value={course}
+            onChange={(e) => setCourse(e.target.value)}
+            required
+            disabled={!college}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:bg-slate-50"
+            style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
+          >
+            <option value="">{!college ? "Select department" : "-- Choice --"}</option>
+            {college &&
+              ACADEMIC_DATA[college].courses.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+          </select>
+        </div>
+
+        {/* NEW: Dynamic Year Level Selector */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Year Level</label>
+          <select
+            value={yearLevel}
+            onChange={(e) => setYearLevel(e.target.value)}
+            required
+            disabled={!college || isBasicEd}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:bg-slate-50"
+            style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
+          >
+            {isBasicEd ? (
+              <option value="N/A">N/A (BED)</option>
+            ) : (
+              <>
+                <option value="">-- Year --</option>
+                <option value="1st Year">1st Year</option>
+                <option value="2nd Year">2nd Year</option>
+                <option value="3rd Year">3rd Year</option>
+                <option value="4th Year">4th Year</option>
+                <option value="5th Year">5th Year</option>
+              </>
+            )}
+          </select>
+        </div>
+      </div>
+
+      {/* Retained: Section Input (Using text type as a wide-open customizable field) */}
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">Section</label>
         <input
           value={section}
           onChange={(e) => setSection(e.target.value)}
           required
-          placeholder="e.g. 1-K"
+          placeholder="e.g. A, 1-K, Block-2"
           className="w-full rounded-lg border border-slate-300 px-3 py-2 uppercase font-mono text-sm focus:outline-none focus:ring-2"
           style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
         />

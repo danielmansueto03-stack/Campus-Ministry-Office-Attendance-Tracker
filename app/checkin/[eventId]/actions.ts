@@ -19,9 +19,13 @@ export async function submitCheckIn(prevState: ActionState | null, formData: For
   const eventId = formData.get("eventId") as string;
   const fullNameRaw = (formData.get("fullName") as string) || "";
   const sectionRaw = (formData.get("section") as string) || "";
+  
+  // NEW: Extract academic breakdown data from the dropdown selections
+  const college = (formData.get("college") as string) || "";
+  const course = (formData.get("course") as string) || "";
+  const yearLevel = (formData.get("yearLevel") as string) || "";
 
   const fullName = normalizeNamePart(fullNameRaw);
-  const section = normalizeNamePart(sectionRaw).toUpperCase();
 
   if (!eventId) {
     return {
@@ -30,12 +34,20 @@ export async function submitCheckIn(prevState: ActionState | null, formData: For
     };
   }
 
-  if (!fullName || !section) {
+  if (!fullName || !sectionRaw || !college || !course || !yearLevel) {
     return {
       success: false,
       error: "Please complete all required identity inputs before checking in.",
     };
   }
+
+  // NEW: Compile academic metadata cleanly into the structural section payload string.
+  // This gives the dashboard metrics tracker exactly what it needs to count departments (CHAP, CABECS, etc.)
+  const compiledSection = isNaN(parseInt(yearLevel)) 
+    ? `${college} - ${course} - ${normalizeNamePart(sectionRaw)}`
+    : `${college} - ${course} (${yearLevel}) - ${normalizeNamePart(sectionRaw)}`;
+    
+  const section = compiledSection.toUpperCase();
 
   // Authoritative server-side verification using your atomic postgres function
   const { data, error } = await supabase.rpc("check_in_student", {
@@ -68,7 +80,7 @@ export async function submitCheckIn(prevState: ActionState | null, formData: For
         return {
           success: false,
           error:
-            "Record not found on the official event roster. Please double check your spelling, name sequence, and section code.",
+            "Record not found on the official event roster. Please double check your spelling, name sequence, and academic track choices.",
         };
     }
   }
