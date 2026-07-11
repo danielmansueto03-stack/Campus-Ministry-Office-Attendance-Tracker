@@ -1,7 +1,7 @@
 "use server";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 interface RosterRow {
@@ -10,6 +10,7 @@ interface RosterRow {
   section: string;
 }
 
+// UPDATED: Modified parsing rules to only look for Last Name, First Name (and optional Middle Name/Initial)
 function parseRoster(raw: string, eventId: string) {
   const rows: RosterRow[] = [];
   let skipped = 0;
@@ -20,15 +21,23 @@ function parseRoster(raw: string, eventId: string) {
     .filter((line) => line.length > 0)
     .forEach((line) => {
       const parts = line.split(",").map((p) => p.trim());
-      if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+      
+      // If they didn't even provide a Last Name and First Name, skip it
+      if (parts.length < 2 || !parts[0] || !parts[1]) {
         skipped++;
         return;
       }
-      const [lastName, firstMiddle, section] = parts;
+
+      const lastName = parts[0];
+      const firstNameAndMI = parts[1];
+      
+      // The section is no longer required! If it's left out, we default to "ROSTERED"
+      const section = (parts[2] && parts[2].length > 0) ? parts[2] : "ROSTERED";
+
       rows.push({
         event_id: eventId,
-        full_name: `${lastName}, ${firstMiddle}`,
-        section,
+        full_name: `${lastName}, ${firstNameAndMI}`,
+        section: section.toUpperCase(),
       });
     });
 
@@ -101,10 +110,8 @@ export async function createEvent(
     return { success: false, error: eventError?.message ?? "Failed to create event.", skipped: 0 };
   }
 
-  // Parse the roster string
   const { rows, skipped } = parseRoster(rosterRaw, eventRow.id);
 
-  // CHANGED: Wrapped in a safety conditional block. Only insert if students exist in the parsed array.
   if (rows && rows.length > 0) {
     const { error: rosterError } = await supabaseAdmin.from("event_roster").insert(rows);
     if (rosterError) {
@@ -116,7 +123,6 @@ export async function createEvent(
     }
   }
 
-  // Clear cache pathways safely
   revalidatePath("/admin");
   revalidatePath(`/checkin/${eventRow.id}`); 
   
@@ -147,13 +153,11 @@ export async function updateEventSettings(
   const start_time = (formData.get("start_time") as string) || null;
   const end_time = (formData.get("end_time") as string) || null;
   const theme_color = (formData.get("theme_color") as string) || "#4f46e5";
-  const force_status = (formData.get("force_status") as string) || "auto"; 
 
   if (!eventId || !name || !event_date) {
     return { success: false, error: "Event identity parameters, title, and target calendar dates are required." };
   }
 
-  // Authoritative operational patch payload assembly
   const { error: patchError } = await supabaseAdmin
     .from("events")
     .update({
@@ -170,7 +174,6 @@ export async function updateEventSettings(
     return { success: false, error: `Failed to modify session properties: ${patchError.message}` };
   }
 
-  // Synchronize state contexts immediately across matching server tree maps
   revalidatePath(`/admin/${eventId}`);
   revalidatePath(`/checkin/${eventId}`);
 
