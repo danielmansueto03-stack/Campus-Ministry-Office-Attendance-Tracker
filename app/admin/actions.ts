@@ -131,3 +131,50 @@ export async function logout() {
   
   redirect("/admin/login");
 }
+export type UpdateSettingsState = {
+  success: boolean;
+  error: string;
+};
+
+export async function updateEventSettings(
+  _prevState: UpdateSettingsState,
+  formData: FormData
+): Promise<UpdateSettingsState> {
+  const eventId = formData.get("eventId") as string;
+  const name = (formData.get("name") as string)?.trim();
+  const event_date = formData.get("event_date") as string;
+  const description = (formData.get("description") as string)?.trim() || null;
+  const start_time = (formData.get("start_time") as string) || null;
+  const end_time = (formData.get("end_time") as string) || null;
+  const theme_color = (formData.get("theme_color") as string) || "#4f46e5";
+  const force_status = (formData.get("force_status") as string) || "auto"; 
+
+  if (!eventId || !name || !event_date) {
+    return { success: false, error: "Event identity parameters, title, and target calendar dates are required." };
+  }
+
+  // Authoritative operational patch payload assembly
+  const { error: patchError } = await supabaseAdmin
+    .from("events")
+    .update({
+      name,
+      event_date,
+      description,
+      start_time,
+      end_time,
+      theme_color,
+      // If your database column for force status does not exist yet, you can pass this or fallback cleanly
+      // fields: force_status
+    })
+    .eq("id", eventId);
+
+  if (patchError) {
+    return { success: false, error: `Failed to modify session properties: ${patchError.message}` };
+  }
+
+  // Synchronize state contexts immediately across matching server tree maps
+  revalidatePath(`/admin/${eventId}`);
+  revalidatePath(`/checkin/${eventId}`);
+
+  return { success: true, error: "" };
+}
