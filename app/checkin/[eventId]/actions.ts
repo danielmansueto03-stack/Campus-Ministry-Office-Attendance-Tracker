@@ -15,77 +15,94 @@ function normalizeNamePart(v: string) {
 
 // 2. Use the interface type instead of 'any'
 export async function submitCheckIn(prevState: ActionState | null, formData: FormData) {
-  // Extract values from the adapted Form Data object
   const eventId = formData.get("eventId") as string;
   const fullNameRaw = (formData.get("fullName") as string) || "";
   const sectionRaw = (formData.get("section") as string) || "";
   
-  // NEW: Extract academic breakdown data from the dropdown selections
   const college = (formData.get("college") as string) || "";
   const course = (formData.get("course") as string) || "";
   const yearLevel = (formData.get("yearLevel") as string) || "";
 
   const fullName = normalizeNamePart(fullNameRaw);
 
-  if (!eventId) {
-    return {
-      success: false,
-      error: "Critical Error: Event identification parameters are missing.",
-    };
+  if (!eventId || !fullName || !sectionRaw || !college || !course || !yearLevel) {
+    return { success: false, error: "Please complete all required identity inputs before checking in." };
   }
 
-  if (!fullName || !sectionRaw || !college || !course || !yearLevel) {
-    return {
-      success: false,
-      error: "Please complete all required identity inputs before checking in.",
-    };
-  }
-
-  // NEW: Compile academic metadata cleanly into the structural section payload string.
-  // This gives the dashboard metrics tracker exactly what it needs to count departments (CHAP, CABECS, etc.)
-  const compiledSection = isNaN(parseInt(yearLevel)) 
+  // Compile the detailed academic section for your analytics dashboard
+  const compiledSection = isNaN(parseInt(yearLevel))
     ? `${college} - ${course} - ${normalizeNamePart(sectionRaw)}`
     : `${college} - ${course} (${yearLevel}) - ${normalizeNamePart(sectionRaw)}`;
     
-  const section = compiledSection.toUpperCase();
+  const richSection = compiledSection.toUpperCase();
 
-  // Authoritative server-side verification using your atomic postgres function
-  const { data, error } = await supabase.rpc("check_in_student", {
-    p_event_id: eventId,
-    p_full_name: fullName,
-    p_section: section,
-  });
+  // 1. Fetch event timing to ensure it is open
+  const { data: event, error: eventError } = await supabase
+    .from("events")
+    .select("start_time, end_time")
+    .eq("id", eventId)
+    .single();
 
-  if (error) {
-    return {
-      success: false,
-      error: "Something went wrong. Please try again or notify an administrator.",
-    };
+  if (!event || eventError) {
+    return { success: false, error: "Event could not be verified." };
   }
 
-  const result = data as { success: boolean; error?: string; attendance_id?: string };
+  const now = new Date().getTime();
+  if (event.start_time && now < new Date(event.start_time).getTime()) {
+    return { success: false, error: "Attendance for this event has not opened yet." };
+  }
+  if (event.end_time && now > new Date(event.end_time).getTime()) {
+    return { success: false, error: "Attendance for this event is now closed." };
+  }
 
-  if (!result.success) {
-    switch (result.error) {
-      case "not_started":
-        return { success: false, error: "Attendance for this event has not opened yet." };
-      case "closed":
-        return { success: false, error: "Attendance for this event is now closed." };
-      case "already_checked_in":
-        return { success: false, error: "This student profile has already checked in." };
-      case "not_found":
-        return { success: false, error: "This event session target could not be verified." };
-      case "not_on_roster":
-      default:
-        return {
-          success: false,
-          error:
-            "Record not found on the official event roster. Please double check your spelling, name sequence, and academic track choices.",
-        };
+  // 2. Check if the event has a roster, and if the student is on it (BY NAME ONLY)
+  const { count: rosterCount } = await supabase
+    .from("event_roster")
+    .select("*", { count: "exact", head: true })
+    .eq("event_id", eventId);
+
+  if (rosterCount && rosterCount > 0) {
+    const { data: rosterEntry } = await supabase
+      .from("event_roster")
+      .select("id")
+      .eq("event_id", eventId)
+      .ilike("full_name", fullName) // ilike makes it safely case-insensitive
+      .maybeSingle();
+
+    if (!rosterEntry) {
+      return {
+        success: false,
+        error: "Record not found on the official event roster. Please double check your spelling and name sequence.",
+      };
     }
   }
 
-  // Force Next.js to purge cache for the matching layout dashboards
+  // 3. Check if the student has already checked in to prevent duplicates
+  const { data: existingEntry } = await supabase
+    .from("attendance")
+    .select("id")
+    .eq("event_id", eventId)
+    .ilike("full_name", fullName)
+    .maybeSingle();
+
+  if (existingEntry) {
+    return { success: false, error: "This student profile has already checked in." };
+  }
+
+  // 4. Insert the final attendance record with the detailed track data!
+  const { error: insertError } = await supabase
+    .from("attendance")
+    .insert({
+      event_id: eventId,
+      full_name: fullName,
+      section: richSection, 
+    });
+
+  if (insertError) {
+    return { success: false, error: "Failed to record attendance. Please try again." };
+  }
+
+  // Purge the cache so the admin dashboard updates instantly
   revalidatePath(`/admin/${eventId}`);
   
   return { success: true, error: "" };

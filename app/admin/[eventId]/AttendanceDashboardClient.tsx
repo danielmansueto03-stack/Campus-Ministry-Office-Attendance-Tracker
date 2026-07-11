@@ -42,7 +42,7 @@ export default function AttendanceDashboardClient({
   roster,
 }: AttendanceDashboardClientProps) {
   const [activeTab, setActiveTab] = useState<"present" | "absent" | "logs">("present");
-  const [sectionFilter, setSectionFilter] = useState("");
+  const [searchFilter, setSearchFilter] = useState("");
   const [isEditing, setIsEditing] = useState(false);
 
   // Settings modification action hooks
@@ -72,10 +72,10 @@ export default function AttendanceDashboardClient({
     departmentMetrics[deptKey] = (departmentMetrics[deptKey] || 0) + 1;
   });
 
-  // Structural dynamic list compilation
+  // Structural dynamic list compilation - NOW FILTERS BY NAME
   const targetList = activeTab === "present" ? presentList : absentList;
   const filteredStudents = targetList.filter((student) =>
-    student.section.toLowerCase().includes(sectionFilter.trim().toLowerCase())
+    student.full_name.toLowerCase().includes(searchFilter.trim().toLowerCase())
   );
 
   const checkInUrl = typeof window !== "undefined" ? `${window.location.origin}/checkin/${event.id}` : `/checkin/${event.id}`;
@@ -154,14 +154,6 @@ export default function AttendanceDashboardClient({
             <label className="mb-1 block text-xs font-semibold text-slate-700">Attendance Gate Closes</label>
             <input type="datetime-local" name="end_time" defaultValue={event.end_time ? event.end_time.substring(0,16) : ""} className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
           </div>
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-semibold text-slate-700">Manual Gateway Override Control</label>
-            <select name="force_status" defaultValue="auto" className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm bg-white font-medium text-indigo-700">
-              <option value="auto">⏱ Automatic (Evaluate input open/close dates above)</option>
-              <option value="open">🟢 Force Gateway Open (Allow all registrations right now)</option>
-              <option value="closed">🔴 Force Gateway Closed (Lock tracking right now)</option>
-            </select>
-          </div>
           <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setIsEditing(false)} className="rounded-md border px-4 py-1.5 text-sm font-medium bg-white hover:bg-slate-50">Cancel</button>
             <button type="submit" disabled={isSettingsPending} style={{ backgroundColor: event.theme_color }} className="rounded-md px-4 py-1.5 text-sm font-medium text-white hover:opacity-90">
@@ -219,31 +211,33 @@ export default function AttendanceDashboardClient({
           </div>
 
           <div className="w-full sm:w-72">
-            <input type="text" placeholder="Filter parameters by section code..." value={sectionFilter} onChange={(e) => setSectionFilter(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:outline-none" />
+            <input 
+              type="text" 
+              placeholder="Filter by student name..." 
+              value={searchFilter} 
+              onChange={(e) => setSearchFilter(e.target.value)} 
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:outline-none" 
+            />
           </div>
         </div>
 
         {/* Data Output Box */}
         <div className="overflow-hidden rounded-xl bg-white shadow-sm border border-slate-200">
           {filteredStudents.length === 0 ? (
-            <div className="py-12 text-center text-slate-400 text-sm">No matching student profiles found on this layout index.</div>
+            <div className="py-12 text-center text-slate-400 text-sm">No matching student profiles found.</div>
           ) : (
             <table className="w-full text-left text-sm text-slate-600">
               <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500 border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-3">Student Full Name</th>
-                  <th className="px-6 py-3">Section</th>
-                  <th className="px-6 py-3">Status Parameter</th>
+                  <th className="px-6 py-3 w-40 text-right">Status Parameter</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredStudents.map((student) => (
                   <tr key={student.id} className="hover:bg-slate-50/80">
                     <td className="whitespace-nowrap px-6 py-4 font-medium text-slate-900">{student.full_name}</td>
-                    <td className="px-6 py-4">
-                      <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-700">{student.section}</span>
-                    </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 text-right">
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${student.has_checked_in ? "bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20" : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20"}`}>
                         {student.has_checked_in ? "Checked In" : "Absent"}
                       </span>
