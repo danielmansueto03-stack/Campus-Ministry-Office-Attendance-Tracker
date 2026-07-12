@@ -65,7 +65,6 @@ export default function AttendanceDashboardClient({
   const checkInCount = attendanceLog.length;
   const progressPercentage = isClosedRosterEvent && totalRosterCount ? Math.round((checkInCount / totalRosterCount) * 100) : 100;
 
-  // NEW DUAL-TRACKER LOGIC (Extracts both Department AND Course)
   const departmentMetrics: Record<string, number> = {};
   const courseMetrics: Record<string, number> = {};
 
@@ -77,11 +76,10 @@ export default function AttendanceDashboardClient({
     let courseKey = "";
 
     if (parts.length >= 2) {
-      deptKey = parts[0]; // Gets the first part (e.g., CHAP, CABECS)
-      const courseMatch = parts[1].match(/^[A-Z]+/); // Extracts BSN from "BSN (2ND YEAR)"
+      deptKey = parts[0];
+      const courseMatch = parts[1].match(/^[A-Z]+/);
       courseKey = courseMatch ? courseMatch[0] : parts[1];
     } else {
-      // Fallback just in case standard formatting is missing
       const match = rawSection.match(/^[A-Z]+/);
       deptKey = match ? match[0] : "OTHER";
     }
@@ -100,7 +98,7 @@ export default function AttendanceDashboardClient({
   );
 
   const checkInUrl = typeof window !== "undefined" ? `${window.location.origin}/checkin/${event.id}` : `/checkin/${event.id}`;
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(checkInUrl)}`;
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(checkInUrl)}`; // Upgraded to 400x400 for crisper print layout
 
   const handleUpdateSubmission = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -138,6 +136,27 @@ export default function AttendanceDashboardClient({
     document.body.removeChild(link);
   };
 
+  // NEW: QR CODE DOWNLOAD LOGIC
+  const handleDownloadQR = async () => {
+    try {
+      const response = await fetch(qrImageUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement("a");
+      const safeEventName = event.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      link.href = url;
+      link.download = `${safeEventName}_checkin_qr.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to download QR code image:", error);
+      alert("Could not download the QR image directly. You can right-click the QR code and select 'Save Image As'.");
+    }
+  };
+
   return (
     <div className="mx-auto max-w-4xl p-6 space-y-8">
       {/* Top Banner Layout Section */}
@@ -168,12 +187,18 @@ export default function AttendanceDashboardClient({
           </div>
         </div>
 
-        {/* QR Box */}
+        {/* QR Box with Download Capability */}
         <div className="flex flex-col items-center justify-center border-t md:border-t-0 md:border-l border-slate-200 pt-4 md:pt-0 md:pl-8 text-center shrink-0">
           <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 shadow-inner">
             <img src={qrImageUrl} alt="Attendance QR Code" className="w-32 h-32 object-contain rounded" />
           </div>
-          <p className="mt-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">Session QR Target</p>
+          <button
+            onClick={handleDownloadQR}
+            className="mt-2.5 inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 border border-slate-300 hover:bg-slate-200 transition"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            Download QR
+          </button>
         </div>
       </div>
 
@@ -231,7 +256,7 @@ export default function AttendanceDashboardClient({
           </div>
         </div>
 
-        {/* NEW COURSE COUNTERS */}
+        {/* COURSE COUNTERS */}
         {Object.keys(courseMetrics).length > 0 && (
           <div>
             <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">Course / Program Check-ins</h2>
