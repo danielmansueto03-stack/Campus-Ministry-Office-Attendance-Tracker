@@ -65,12 +65,31 @@ export default function AttendanceDashboardClient({
   const checkInCount = attendanceLog.length;
   const progressPercentage = isClosedRosterEvent && totalRosterCount ? Math.round((checkInCount / totalRosterCount) * 100) : 100;
 
+  // NEW DUAL-TRACKER LOGIC (Extracts both Department AND Course)
   const departmentMetrics: Record<string, number> = {};
+  const courseMetrics: Record<string, number> = {};
+
   attendanceLog.forEach((item) => {
     const rawSection = (item.section || "").toUpperCase();
-    const match = rawSection.match(/[A-Z]+/);
-    const deptKey = match ? match[0] : "OTHER";
+    const parts = rawSection.split("-").map(p => p.trim());
+
+    let deptKey = "OTHER";
+    let courseKey = "";
+
+    if (parts.length >= 2) {
+      deptKey = parts[0]; // Gets the first part (e.g., CHAP, CABECS)
+      const courseMatch = parts[1].match(/^[A-Z]+/); // Extracts BSN from "BSN (2ND YEAR)"
+      courseKey = courseMatch ? courseMatch[0] : parts[1];
+    } else {
+      // Fallback just in case standard formatting is missing
+      const match = rawSection.match(/^[A-Z]+/);
+      deptKey = match ? match[0] : "OTHER";
+    }
+
     departmentMetrics[deptKey] = (departmentMetrics[deptKey] || 0) + 1;
+    if (courseKey && courseKey !== "OTHER") {
+      courseMetrics[courseKey] = (courseMetrics[courseKey] || 0) + 1;
+    }
   });
 
   const targetList = activeTab === "present" ? presentList : absentList;
@@ -93,29 +112,23 @@ export default function AttendanceDashboardClient({
     });
   };
 
-  // EXPORT TO EXCEL (CSV) FUNCTIONALITY
   const handleExportCSV = () => {
     if (presentList.length === 0) {
       alert("No attendance data to export yet.");
       return;
     }
 
-    // 1. Create CSV Headers
     let csvContent = "Student Full Name,Academic Track (Dept-Course-Year-Section),Status\n";
 
-    // 2. Loop through the present list and format rows
     presentList.forEach((student) => {
-      // Escape quotes to prevent CSV breaking if names contain commas
       const name = `"${(student.full_name || "Unknown").replace(/"/g, '""')}"`;
       const track = `"${(student.section || "No Data").replace(/"/g, '""')}"`;
       csvContent += `${name},${track},Checked In\n`;
     });
 
-    // 3. Create a downloadable file blob
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     
-    // 4. Trigger the download automatically
     const link = document.createElement("a");
     const safeEventName = event.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     link.setAttribute("href", url);
@@ -167,7 +180,6 @@ export default function AttendanceDashboardClient({
       {/* Inline Management Override Panel */}
       {isEditing && (
         <form onSubmit={handleUpdateSubmission} className="bg-slate-50 border border-slate-200 rounded-xl p-5 grid gap-4 sm:grid-cols-2 animate-in fade-in duration-200">
-          {/* Form Content Remains Exactly the Same */}
           <h3 className="sm:col-span-2 text-sm font-bold text-slate-800 uppercase tracking-wide border-b border-slate-200 pb-1">
             Live Administrative Adjustments
           </h3>
@@ -198,24 +210,42 @@ export default function AttendanceDashboardClient({
         </form>
       )}
 
-      {/* DEPARTMENT COUNTER DISPLAY GRIDS */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Real-Time College/Department Counters</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {Object.keys(departmentMetrics).length === 0 ? (
-            <div className="col-span-full py-4 text-center text-sm text-slate-400 bg-slate-50 rounded-lg border border-dashed">
-              Awaiting student entries to map department distribution metrics...
-            </div>
-          ) : (
-            Object.entries(departmentMetrics).map(([deptName, count]) => (
-              <div key={deptName} className="rounded-xl bg-white p-4 shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{deptName}</span>
-                <span className="text-3xl font-black text-slate-800 mt-1">{count}</span>
-                <span className="text-[10px] font-medium text-slate-500 mt-0.5">Checked In</span>
+      {/* DEPARTMENT & COURSE COUNTER DISPLAY GRIDS */}
+      <section className="space-y-6">
+        <div>
+          <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">Real-Time College/Department Counters</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {Object.keys(departmentMetrics).length === 0 ? (
+              <div className="col-span-full py-4 text-center text-sm text-slate-400 bg-slate-50 rounded-lg border border-dashed">
+                Awaiting student entries to map department distribution metrics...
               </div>
-            ))
-          )}
+            ) : (
+              Object.entries(departmentMetrics).map(([deptName, count]) => (
+                <div key={deptName} className="rounded-xl bg-white p-4 shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{deptName}</span>
+                  <span className="text-3xl font-black text-slate-800 mt-1">{count}</span>
+                  <span className="text-[10px] font-medium text-slate-500 mt-0.5">Checked In</span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
+
+        {/* NEW COURSE COUNTERS */}
+        {Object.keys(courseMetrics).length > 0 && (
+          <div>
+            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">Course / Program Check-ins</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {Object.entries(courseMetrics).map(([courseName, count]) => (
+                <div key={courseName} className="rounded-xl bg-white p-4 shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
+                  <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">{courseName}</span>
+                  <span className="text-3xl font-black text-slate-800 mt-1">{count}</span>
+                  <span className="text-[10px] font-medium text-slate-500 mt-0.5">Checked In</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Roster Progress Visual Card */}
@@ -254,7 +284,6 @@ export default function AttendanceDashboardClient({
               className="w-full sm:w-64 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:outline-none" 
             />
             
-            {/* NEW EXPORT BUTTON */}
             <button 
               onClick={handleExportCSV} 
               className="w-full sm:w-auto whitespace-nowrap rounded-lg bg-emerald-50 px-4 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition border border-emerald-200 flex items-center justify-center gap-1.5"
@@ -274,7 +303,6 @@ export default function AttendanceDashboardClient({
               <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500 border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-3">Student Full Name</th>
-                  {/* RE-ADDED TRACK COLUMN */}
                   <th className="px-6 py-3">Academic Track</th>
                   <th className="px-6 py-3 w-40 text-right">Status Parameter</th>
                 </tr>
@@ -284,7 +312,6 @@ export default function AttendanceDashboardClient({
                   <tr key={student.id} className="hover:bg-slate-50/80">
                     <td className="whitespace-nowrap px-6 py-4 font-medium text-slate-900">{student.full_name}</td>
                     
-                    {/* DISPLAY THE COMPILED ACADEMIC DETAILS HERE */}
                     <td className="px-6 py-4 text-xs font-mono text-slate-500">
                       {student.section || "N/A"}
                     </td>
