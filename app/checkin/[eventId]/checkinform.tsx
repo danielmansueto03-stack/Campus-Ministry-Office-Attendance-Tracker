@@ -3,7 +3,6 @@
 import { useState, useEffect, useActionState, startTransition } from "react";
 import { submitCheckIn } from "./actions"; 
 
-// 1. Institutional data mapping for dropdown cascades
 const ACADEMIC_DATA = {
   CHAP: {
     name: "College of Health and Allied Professions (CHAP)",
@@ -51,16 +50,20 @@ export default function CheckInForm({
   const [lastName, setLastName] = useState("");
   const [section, setSection] = useState("");
   
-  // New tracking state fields for tracking metrics per college/course
   const [college, setCollege] = useState<CollegeKey | "">("");
   const [course, setCourse] = useState("");
   const [yearLevel, setYearLevel] = useState("");
 
-  // 1. Hook up the formal React Action State with your server action
   const [state, formAction, isPending] = useActionState(submitCheckIn, initialState);
-
-  // 2. Lock synchronization time safely
   const [clientTime, setClientTime] = useState<number | null>(null);
+
+  // Check browser memory once on load to see if they previously checked in
+  const [alreadyCheckedInOnLoad] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem(`checked_in_event_${eventId}`) === "true";
+    }
+    return false;
+  });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -69,21 +72,27 @@ export default function CheckInForm({
     return () => clearTimeout(timer);
   }, []);
 
+  // Write token to storage ONLY when a new success happens, without triggering state side-effects
+  if (state?.success && typeof window !== "undefined") {
+    localStorage.setItem(`checked_in_event_${eventId}`, "true");
+  }
+
+  // Determine if the device should be blocked (either from past history OR fresh server success)
+  const isDeviceBlocked = alreadyCheckedInOnLoad || state?.success;
+
   const handleCollegeChange = (val: CollegeKey | "") => {
     setCollege(val);
-    setCourse(""); // Purge active course choices to prevent layout mismatch anomalies
+    setCourse(""); 
     if (val === "BED") {
-      setYearLevel("N/A"); // Auto-assign high school entries as N/A
+      setYearLevel("N/A"); 
     } else {
       setYearLevel("");
     }
   };
 
-  // 3. The Interceptor: Compile the fields into the layout expected by actions.ts
   const handleFormSubmission = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Reconstruct Last, First M.I. layout authorized by your roster script
     const miPart = middleInitial.trim() ? ` ${middleInitial.trim()}.` : "";
     const compiledFullName = `${lastName.trim()}, ${firstName.trim()}${miPart}`;
 
@@ -92,24 +101,40 @@ export default function CheckInForm({
     formData.append("fullName", compiledFullName);
     formData.append("section", section);
     
-    // NEW: Pack the academic breakdown details safely into the formData payload
     formData.append("college", college);
     formData.append("course", course);
     formData.append("yearLevel", yearLevel);
 
-    // Fire the server transition securely
     startTransition(() => {
       formAction(formData);
     });
   };
 
-  // 4. Render explicit Success UI state upon successful backend confirmation
+  // 1. Render Success UI if they just checked in successfully right now
   if (state?.success) {
     return (
       <div className="text-center p-6 bg-emerald-50 rounded-xl border border-emerald-200">
         <h3 className="text-lg font-semibold text-emerald-800 mb-1">Check-In Successful!</h3>
         <p className="text-sm text-emerald-600">
           Your attendance profile has been recorded on the roster. You may safely close this window.
+        </p>
+      </div>
+    );
+  }
+
+  // 2. Render Device Locked UI if they were already locked on page load
+  if (isDeviceBlocked) {
+    return (
+      <div className="text-center p-6 bg-red-50 rounded-xl border border-red-200 space-y-3 animate-in fade-in duration-300">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-6 h-6">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-bold text-red-800">Device Limit Reached</h3>
+        <p className="text-sm text-red-600 leading-relaxed">
+          This smartphone has already registered an attendance log for this session. 
+          To maintain security compliance, proxy submissions are blocked.
         </p>
       </div>
     );
@@ -146,7 +171,6 @@ export default function CheckInForm({
         Enter your complete official name and academic section parameters exactly to record your attendance.
       </p>
 
-      {/* Capture server errors returned by your database atomic check script */}
       {state?.error && (
         <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{state.error}</p>
       )}
@@ -186,7 +210,6 @@ export default function CheckInForm({
         />
       </div>
 
-      {/* NEW: College Dropdown Field Selection */}
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">College / Department</label>
         <select
@@ -204,7 +227,6 @@ export default function CheckInForm({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {/* NEW: Dynamic Dependent Course Selection Field */}
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">
             {isBasicEd ? "Grade Level" : "Course"}
@@ -225,7 +247,6 @@ export default function CheckInForm({
           </select>
         </div>
 
-        {/* NEW: Dynamic Year Level Selector */}
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Year Level</label>
           <select
@@ -252,7 +273,6 @@ export default function CheckInForm({
         </div>
       </div>
 
-      {/* Retained: Section Input (Using text type as a wide-open customizable field) */}
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">Section</label>
         <input
