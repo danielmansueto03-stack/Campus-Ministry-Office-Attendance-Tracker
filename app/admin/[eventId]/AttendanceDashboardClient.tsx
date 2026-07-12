@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useActionState, startTransition } from "react";
+import { useState, useActionState, startTransition, useEffect } from "react";
 import { updateEventSettings } from "../actions";
 
 interface EventDetails {
@@ -45,8 +45,15 @@ export default function AttendanceDashboardClient({
   const [activeTab, setActiveTab] = useState<"present" | "absent" | "logs">("present");
   const [searchFilter, setSearchFilter] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const [settingsState, settingsFormAction, isSettingsPending] = useActionState(updateEventSettings, { success: false, error: "" });
+
+  // Update current time every minute to keep the Gate Status badge accurate
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const isClosedRosterEvent = roster && roster.length > 0;
 
@@ -98,7 +105,21 @@ export default function AttendanceDashboardClient({
   );
 
   const checkInUrl = typeof window !== "undefined" ? `${window.location.origin}/checkin/${event.id}` : `/checkin/${event.id}`;
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(checkInUrl)}`; // Upgraded to 400x400 for crisper print layout
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(checkInUrl)}`;
+
+  // Determine Live Gate Status
+  const startMs = event.start_time ? new Date(event.start_time).getTime() : 0;
+  const endMs = event.end_time ? new Date(event.end_time).getTime() : Infinity;
+  let gateStatus = "GATE OPEN";
+  let gateColor = "bg-emerald-100 text-emerald-800 ring-emerald-700/20";
+  
+  if (event.start_time && currentTime < startMs) {
+    gateStatus = "SCHEDULED (CLOSED)";
+    gateColor = "bg-amber-100 text-amber-800 ring-amber-700/20";
+  } else if (event.end_time && currentTime > endMs) {
+    gateStatus = "GATE CLOSED";
+    gateColor = "bg-red-100 text-red-800 ring-red-700/20";
+  }
 
   const handleUpdateSubmission = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -110,23 +131,47 @@ export default function AttendanceDashboardClient({
     });
   };
 
+  // NEW: Quick Force Open/Close Actions
+  const handleForceAction = (actionType: "open" | "close") => {
+    const isOpening = actionType === "open";
+    if (!window.confirm(`Are you sure you want to force ${isOpening ? "OPEN" : "CLOSE"} the attendance gate right now?`)) return;
+
+    // Get current local time in YYYY-MM-DDTHH:mm format for the database
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    const localNow = now.toISOString().slice(0, 16);
+
+    const data = new FormData();
+    data.append("eventId", event.id);
+    data.append("name", event.name);
+    data.append("event_date", event.event_date);
+    
+    if (isOpening) {
+      data.append("start_time", localNow);
+      data.append("end_time", ""); // Wipe end time to keep it open indefinitely
+    } else {
+      data.append("start_time", event.start_time || ""); // Keep original start time
+      data.append("end_time", localNow); // Cap it right now
+    }
+
+    startTransition(() => {
+      settingsFormAction(data);
+    });
+  };
+
   const handleExportCSV = () => {
     if (presentList.length === 0) {
       alert("No attendance data to export yet.");
       return;
     }
-
     let csvContent = "Student Full Name,Academic Track (Dept-Course-Year-Section),Status\n";
-
     presentList.forEach((student) => {
       const name = `"${(student.full_name || "Unknown").replace(/"/g, '""')}"`;
       const track = `"${(student.section || "No Data").replace(/"/g, '""')}"`;
       csvContent += `${name},${track},Checked In\n`;
     });
-
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    
     const link = document.createElement("a");
     const safeEventName = event.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     link.setAttribute("href", url);
@@ -136,13 +181,11 @@ export default function AttendanceDashboardClient({
     document.body.removeChild(link);
   };
 
-  // NEW: QR CODE DOWNLOAD LOGIC
   const handleDownloadQR = async () => {
     try {
       const response = await fetch(qrImageUrl);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-      
       const link = document.createElement("a");
       const safeEventName = event.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
       link.href = url;
@@ -162,14 +205,18 @@ export default function AttendanceDashboardClient({
       {/* Top Banner Layout Section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 rounded-xl bg-white p-6 shadow-sm border border-slate-200">
         <div className="space-y-2 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10">
               Active Management Terminal
             </span>
             <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
-              isClosedRosterEvent ? "bg-blue-50 text-blue-700 ring-blue-700/10" : "bg-emerald-50 text-emerald-700 ring-emerald-700/10"
+              isClosedRosterEvent ? "bg-blue-50 text-blue-700 ring-blue-700/10" : "bg-slate-50 text-slate-700 ring-slate-700/10"
             }`}>
               {isClosedRosterEvent ? "Roster Validated Event" : "Open Attendance Event"}
+            </span>
+            {/* NEW: Dynamic Gate Status Badge */}
+            <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset shadow-sm ${gateColor}`}>
+              {gateStatus}
             </span>
           </div>
           <h1 className="text-3xl font-bold text-slate-900">{event.name}</h1>
@@ -205,9 +252,32 @@ export default function AttendanceDashboardClient({
       {/* Inline Management Override Panel */}
       {isEditing && (
         <form onSubmit={handleUpdateSubmission} className="bg-slate-50 border border-slate-200 rounded-xl p-5 grid gap-4 sm:grid-cols-2 animate-in fade-in duration-200">
-          <h3 className="sm:col-span-2 text-sm font-bold text-slate-800 uppercase tracking-wide border-b border-slate-200 pb-1">
-            Live Administrative Adjustments
-          </h3>
+          
+          {/* HEADER ROW WITH FORCE BUTTONS */}
+          <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+              Live Administrative Adjustments
+            </h3>
+            <div className="flex gap-2">
+              <button 
+                type="button" 
+                onClick={() => handleForceAction('open')}
+                disabled={isSettingsPending}
+                className="text-xs bg-emerald-100 text-emerald-800 hover:bg-emerald-200 font-bold px-3 py-1.5 rounded border border-emerald-300 transition shadow-sm disabled:opacity-50"
+              >
+                🟢 Force Open Gate
+              </button>
+              <button 
+                type="button" 
+                onClick={() => handleForceAction('close')}
+                disabled={isSettingsPending}
+                className="text-xs bg-red-100 text-red-800 hover:bg-red-200 font-bold px-3 py-1.5 rounded border border-red-300 transition shadow-sm disabled:opacity-50"
+              >
+                🔴 Force Close Gate
+              </button>
+            </div>
+          </div>
+
           {settingsState?.error && <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 p-2.5 rounded-md">{settingsState.error}</p>}
           
           <div>
