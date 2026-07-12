@@ -18,8 +18,8 @@ interface EventDetails {
 interface AttendanceLogEntry {
   id: string;
   event_id: string;
-  full_name?: string; // FIXED: Added this to match the database column
-  student_name?: string; // Kept as a fallback just in case
+  full_name?: string; 
+  student_name?: string; 
   section: string;
   created_at: string;
 }
@@ -50,7 +50,6 @@ export default function AttendanceDashboardClient({
 
   const isClosedRosterEvent = roster && roster.length > 0;
 
-  // FIXED: Safely grab either full_name or student_name so it's never undefined
   const presentList = isClosedRosterEvent 
     ? roster.filter((student) => student.has_checked_in)
     : attendanceLog.map((log) => ({ 
@@ -76,9 +75,9 @@ export default function AttendanceDashboardClient({
 
   const targetList = activeTab === "present" ? presentList : absentList;
   
-  // FIXED: Added a safety check (student.full_name || "") so toLowerCase() never crashes
   const filteredStudents = targetList.filter((student) =>
-    (student.full_name || "").toLowerCase().includes(searchFilter.trim().toLowerCase())
+    (student.full_name || "").toLowerCase().includes(searchFilter.trim().toLowerCase()) ||
+    (student.section || "").toLowerCase().includes(searchFilter.trim().toLowerCase())
   );
 
   const checkInUrl = typeof window !== "undefined" ? `${window.location.origin}/checkin/${event.id}` : `/checkin/${event.id}`;
@@ -92,6 +91,38 @@ export default function AttendanceDashboardClient({
       settingsFormAction(data);
       setIsEditing(false);
     });
+  };
+
+  // EXPORT TO EXCEL (CSV) FUNCTIONALITY
+  const handleExportCSV = () => {
+    if (presentList.length === 0) {
+      alert("No attendance data to export yet.");
+      return;
+    }
+
+    // 1. Create CSV Headers
+    let csvContent = "Student Full Name,Academic Track (Dept-Course-Year-Section),Status\n";
+
+    // 2. Loop through the present list and format rows
+    presentList.forEach((student) => {
+      // Escape quotes to prevent CSV breaking if names contain commas
+      const name = `"${(student.full_name || "Unknown").replace(/"/g, '""')}"`;
+      const track = `"${(student.section || "No Data").replace(/"/g, '""')}"`;
+      csvContent += `${name},${track},Checked In\n`;
+    });
+
+    // 3. Create a downloadable file blob
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    // 4. Trigger the download automatically
+    const link = document.createElement("a");
+    const safeEventName = event.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${safeEventName}_attendance_report.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -136,6 +167,7 @@ export default function AttendanceDashboardClient({
       {/* Inline Management Override Panel */}
       {isEditing && (
         <form onSubmit={handleUpdateSubmission} className="bg-slate-50 border border-slate-200 rounded-xl p-5 grid gap-4 sm:grid-cols-2 animate-in fade-in duration-200">
+          {/* Form Content Remains Exactly the Same */}
           <h3 className="sm:col-span-2 text-sm font-bold text-slate-800 uppercase tracking-wide border-b border-slate-200 pb-1">
             Live Administrative Adjustments
           </h3>
@@ -213,14 +245,23 @@ export default function AttendanceDashboardClient({
             )}
           </div>
 
-          <div className="w-full sm:w-72">
+          <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
             <input 
               type="text" 
-              placeholder="Filter by student name..." 
+              placeholder="Search names or courses..." 
               value={searchFilter} 
               onChange={(e) => setSearchFilter(e.target.value)} 
-              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:outline-none" 
+              className="w-full sm:w-64 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:outline-none" 
             />
+            
+            {/* NEW EXPORT BUTTON */}
+            <button 
+              onClick={handleExportCSV} 
+              className="w-full sm:w-auto whitespace-nowrap rounded-lg bg-emerald-50 px-4 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition border border-emerald-200 flex items-center justify-center gap-1.5"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+              Export CSV
+            </button>
           </div>
         </div>
 
@@ -233,6 +274,8 @@ export default function AttendanceDashboardClient({
               <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500 border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-3">Student Full Name</th>
+                  {/* RE-ADDED TRACK COLUMN */}
+                  <th className="px-6 py-3">Academic Track</th>
                   <th className="px-6 py-3 w-40 text-right">Status Parameter</th>
                 </tr>
               </thead>
@@ -240,6 +283,12 @@ export default function AttendanceDashboardClient({
                 {filteredStudents.map((student) => (
                   <tr key={student.id} className="hover:bg-slate-50/80">
                     <td className="whitespace-nowrap px-6 py-4 font-medium text-slate-900">{student.full_name}</td>
+                    
+                    {/* DISPLAY THE COMPILED ACADEMIC DETAILS HERE */}
+                    <td className="px-6 py-4 text-xs font-mono text-slate-500">
+                      {student.section || "N/A"}
+                    </td>
+
                     <td className="px-6 py-4 text-right">
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${student.has_checked_in ? "bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20" : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20"}`}>
                         {student.has_checked_in ? "Checked In" : "Absent"}
