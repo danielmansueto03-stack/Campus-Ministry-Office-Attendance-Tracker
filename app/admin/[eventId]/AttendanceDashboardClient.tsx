@@ -18,7 +18,8 @@ interface EventDetails {
 interface AttendanceLogEntry {
   id: string;
   event_id: string;
-  student_name: string;
+  full_name?: string; // FIXED: Added this to match the database column
+  student_name?: string; // Kept as a fallback just in case
   section: string;
   created_at: string;
 }
@@ -45,16 +46,19 @@ export default function AttendanceDashboardClient({
   const [searchFilter, setSearchFilter] = useState("");
   const [isEditing, setIsEditing] = useState(false);
 
-  // Settings modification action hooks
   const [settingsState, settingsFormAction, isSettingsPending] = useActionState(updateEventSettings, { success: false, error: "" });
 
-  // 1. CHAMELEON ROSTER LOGIC: Check if this event tracks an explicit roster or is completely open
   const isClosedRosterEvent = roster && roster.length > 0;
 
-  // Compile present/absent states based on roster mode selection
+  // FIXED: Safely grab either full_name or student_name so it's never undefined
   const presentList = isClosedRosterEvent 
     ? roster.filter((student) => student.has_checked_in)
-    : attendanceLog.map((log) => ({ id: log.id, full_name: log.student_name, section: log.section, has_checked_in: true }));
+    : attendanceLog.map((log) => ({ 
+        id: log.id, 
+        full_name: log.full_name || log.student_name || "Unknown", 
+        section: log.section, 
+        has_checked_in: true 
+      }));
 
   const absentList = isClosedRosterEvent ? roster.filter((student) => !student.has_checked_in) : [];
   
@@ -62,20 +66,19 @@ export default function AttendanceDashboardClient({
   const checkInCount = attendanceLog.length;
   const progressPercentage = isClosedRosterEvent && totalRosterCount ? Math.round((checkInCount / totalRosterCount) * 100) : 100;
 
-  // 2. DEPARTMENT STATS TRACKER: Extract and group sections (CHAP, CABECS, etc.)
   const departmentMetrics: Record<string, number> = {};
   attendanceLog.forEach((item) => {
-    const rawSection = item.section.toUpperCase();
-    // Regex matches alphabetic tokens like CHAP, CABECS, CAS, etc.
+    const rawSection = (item.section || "").toUpperCase();
     const match = rawSection.match(/[A-Z]+/);
     const deptKey = match ? match[0] : "OTHER";
     departmentMetrics[deptKey] = (departmentMetrics[deptKey] || 0) + 1;
   });
 
-  // Structural dynamic list compilation - NOW FILTERS BY NAME
   const targetList = activeTab === "present" ? presentList : absentList;
+  
+  // FIXED: Added a safety check (student.full_name || "") so toLowerCase() never crashes
   const filteredStudents = targetList.filter((student) =>
-    student.full_name.toLowerCase().includes(searchFilter.trim().toLowerCase())
+    (student.full_name || "").toLowerCase().includes(searchFilter.trim().toLowerCase())
   );
 
   const checkInUrl = typeof window !== "undefined" ? `${window.location.origin}/checkin/${event.id}` : `/checkin/${event.id}`;
